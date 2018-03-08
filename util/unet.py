@@ -51,7 +51,6 @@ def unet_model(input_shape=(128, 128, 3), min_filter_num=16, kernel_size=(3, 3),
     for i, filter_num in enumerate(filter_nums[1:]):
         x = _encoder_block(x, filter_num, name='encoder_block_'+str(i+2), strides=strides, kernel_size=kernel_size, dropout=0.1, activation=activation)
         encoders.append(x)
-        print('{0}, filter {1} number encoders are created'.format(i, filter_num))
         if not i == (len(filter_nums) - 2):
             x = MaxPooling2D(up_down_size)(x)
 
@@ -63,7 +62,6 @@ def unet_model(input_shape=(128, 128, 3), min_filter_num=16, kernel_size=(3, 3),
     for i, filter_num in enumerate(decoder_filter_nums):
         # [NOTE] first decoder is concated with the second last encoders!
         x = _decoder_block(x, encoders[-(i+2)], decoder_filter_nums[i], name='decoder_block_'+str(i+1), strides=strides, kernel_size=kernel_size, dropout=0.1, activation=activation)
-        print('{0}, filter {1} number decoders are created'.format(i, filter_num))
 
     # for segmentation, apply sigmoid to every pixel
     outputs = Conv2D(1, (1, 1), activation='sigmoid')(x)
