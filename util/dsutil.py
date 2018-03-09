@@ -205,3 +205,104 @@ def random_crop(img, mask_img, flip=True, shape=(128, 128), subset=None, maxsubs
         # np.append(crop_images, crop_norm_image, axis=0)
 
     return crop_images, mask_images
+
+def tile_predict(img, model, patch_shape=(128, 128)):
+
+    patch_h = patch_shape[0]
+    img_h = img.shape[0]
+
+
+    patch_w = patch_shape[1]
+    img_w = img.shape[1]
+
+    y_list = [(i*patch_h, (i+1)*patch_h) for i in range(img_h//patch_h)]
+    x_list = [(i*patch_w, (i+1)*patch_w) for i in range(img_w//patch_w)]
+
+    # normalize and resize to match for the model input
+    img = np.array(img, dtype='float32')
+    img /= 255
+    img = np.resize(img, (1, img_h, img_w, 3))
+
+    predict = np.zeros((img_h, img_w, 1))
+    for y in y_list:
+        for x in x_list:
+            crop = img[:, y[0]:y[1], x[0]:x[1], :]
+            predict_crop = model.predict(crop)
+            predict_crop_binary = (predict_crop > 0.5).astype(np.uint8)
+            predict[y[0]:y[1], x[0]:x[1], :] = predict_crop_binary
+
+    # return predict
+    # predict the rest of the image
+    # predict right edge
+    for y in y_list:
+        crop = img[:, y[0]:y[1], img_w-patch_w:img_w, :]
+        predict_crop = model.predict(crop)
+        predict_crop_binary = (predict_crop > 0.5).astype(np.uint8)
+        predict[y[0]:y[1], img_w-patch_w:img_w, :] = predict_crop_binary
+
+    # predict bottom edge
+    for x in x_list:
+        crop = img[:, img_h-patch_h:img_h, x[0]:x[1], :]
+        predict_crop = model.predict(crop)
+        predict_crop_binary = (predict_crop > 0.5).astype(np.uint8)
+        predict[img_h-patch_h:img_h, x[0]:x[1], :] = predict_crop_binary
+
+    return predict
+
+# Run-length encoding stolen from https://www.kaggle.com/rakhlin/fast-run-length-encoding-python
+def rle_encoding(x):
+    dots = np.where(x.T.flatten() == 1)[0]
+    run_lengths = []
+    prev = -2
+    for b in dots:
+        if (b>prev+1): run_lengths.extend((b + 1, 0))
+        run_lengths[-1] += 1
+        prev = b
+    return run_lengths
+
+def prob_to_rles(x, cutoff=0.5):
+    lab_img = label(x > cutoff)
+    for i in range(1, lab_img.max() + 1):
+        yield rle_encoding(lab_img == i)
+
+def make_submission_file(X_pred, test_ids, filename='submission.csv'):
+    pass
+    # test_ids = next(os.walk('./data/stage1_test'))[1]
+
+    new_test_ids = []
+    rles = []
+    for n, id_ in enumerate(test_ids):
+        rle = list(prob_to_rles(X_pred[n]))
+        rles.extend(rle)
+        new_test_ids.extend([id_]*len(rle))
+
+    sub = pd.DataFrame()
+    sub['ImageId'] = new_test_ids
+    sub['EncodedPixels'] = pd.Series(rles).apply(lambda x: ' '.join(str(y) for y in x))
+    sub.to_csv('./submission/'+filename, index=False)
+
+    # submit command
+    # $kg submit sub-128-np-eq_3_9.csv -u 'yuusuke' -p 'paul0324' -c 'data-science-bowl-2018'
+    return sub
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
